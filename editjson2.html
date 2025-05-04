@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Advanced JSON Bulk Editor</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; max-width: 900px; margin: auto; }
+    textarea, select, input { width: 100%; margin-top: 10px; padding: 10px; font-family: monospace; }
+    button { padding: 10px 20px; margin-top: 10px; cursor: pointer; }
+    pre { background: #f2f2f2; padding: 15px; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word; }
+    .multi-inputs { margin-top: 10px; }
+    label.checkbox-label { display: block; margin-top: 10px; }
+    #copyButton, #downloadButton { margin-bottom: 10px; margin-right: 10px; }
+  </style>
+</head>
+<body>
+
+  <h2>Advanced JSON Bulk Editor</h2>
+
+  <label>Paste JSON here:</label>
+  <textarea id="jsonInput" rows="10" placeholder='[{"Campus": "", "Name": "Example"}]'></textarea>
+
+  <button onclick="loadFields()">Load Fields</button>
+
+  <label for="fieldSelect">Choose fields to edit:</label>
+  <select id="fieldSelect" multiple size="5" onchange="generateInputs()"></select>
+
+  <div id="multiInputs" class="multi-inputs"></div>
+
+  <label class="checkbox-label">
+    <input type="checkbox" id="retainOnlySelected"> Only include selected fields in output JSON
+  </label>
+
+  <button onclick="applyChanges()">Apply to All</button>
+
+  <h3>Updated JSON:</h3>
+  <button id="copyButton" onclick="copyToClipboard()">📋 Copy to Clipboard</button>
+  <button id="downloadButton" onclick="downloadCSV()">⬇️ Download as CSV</button>
+  <pre id="outputArea">...</pre>
+
+  <script>
+    let jsonData = [];
+
+    function loadFields() {
+      const input = document.getElementById('jsonInput').value;
+      try {
+        jsonData = JSON.parse(input);
+        const allKeys = new Set();
+        jsonData.forEach(item => Object.keys(item).forEach(key => allKeys.add(key)));
+
+        const select = document.getElementById('fieldSelect');
+        select.innerHTML = '';
+        Array.from(allKeys).forEach(key => {
+          const opt = document.createElement('option');
+          opt.value = key;
+          opt.textContent = key;
+          select.appendChild(opt);
+        });
+
+        document.getElementById('outputArea').textContent = 'Fields loaded. Select fields to edit.';
+        document.getElementById('multiInputs').innerHTML = '';
+      } catch (err) {
+        alert('Invalid JSON. Please check your input.');
+      }
+    }
+
+    function generateInputs() {
+      const select = document.getElementById('fieldSelect');
+      const selected = Array.from(select.selectedOptions).map(opt => opt.value);
+
+      const container = document.getElementById('multiInputs');
+      container.innerHTML = '';
+
+      selected.forEach(field => {
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.placeholder = `New value for "${field}" (leave blank to keep existing)`;
+        input.id = `input-${field}`;
+        input.dataset.field = field;
+        container.appendChild(input);
+      });
+    }
+
+    function applyChanges() {
+      const inputs = document.querySelectorAll('#multiInputs input');
+      const newValues = {};
+      const retainOnly = document.getElementById('retainOnlySelected').checked;
+      const selectedFields = Array.from(document.getElementById('fieldSelect').selectedOptions).map(opt => opt.value);
+
+      inputs.forEach(input => {
+        const value = input.value.trim();
+        if (value !== "") {
+          newValues[input.dataset.field] = value;
+        }
+      });
+
+      const updated = jsonData.map(item => {
+        let updatedItem = retainOnly ? {} : { ...item };
+
+        if (retainOnly) {
+          selectedFields.forEach(field => {
+            if (newValues.hasOwnProperty(field)) {
+              updatedItem[field] = newValues[field];
+            } else {
+              updatedItem[field] = item[field];
+            }
+          });
+        } else {
+          Object.entries(newValues).forEach(([field, value]) => {
+            updatedItem[field] = value;
+          });
+        }
+
+        return updatedItem;
+      });
+
+      jsonData = updated;
+      document.getElementById('outputArea').textContent = JSON.stringify(jsonData, null, 2);
+    }
+
+    function copyToClipboard() {
+      const output = document.getElementById('outputArea').textContent;
+      navigator.clipboard.writeText(output).then(() => {
+        alert("Copied to clipboard!");
+      }).catch(err => {
+        alert("Failed to copy: " + err);
+      });
+    }
+
+    function downloadCSV() {
+      if (!jsonData.length) {
+        alert("No data to export.");
+        return;
+      }
+
+      const keys = Object.keys(jsonData[0]);
+      const csv = [keys.join(',')];
+
+      jsonData.forEach(row => {
+        const values = keys.map(key => {
+          const val = row[key] !== undefined ? String(row[key]).replace(/"/g, '""') : '';
+          return `"${val}"`;
+        });
+        csv.push(values.join(','));
+      });
+
+      const blob = new Blob([csv.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'updated_data.csv';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  </script>
+
+</body>
+</html>
